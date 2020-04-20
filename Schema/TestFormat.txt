@@ -1,0 +1,31 @@
+﻿Number of tests
+
+Number of Text value pair
+keys : value
+
+
+Number of image tag and  path value pair
+key : pathToImage
+
+----------------------------------------------------------------
+example: with two test cases
+================================================================
+2
+2
+FirstName : vishal
+LastName : chaudhary
+4
+Image1 : Desktop/1.png
+Image2 : Desktop/2.png
+Image3 : Desktop/3.png
+Image4 : Desktop/4.png
+
+
+1
+FirstName : vishal 
+3
+Image1 : Desktop/1.png
+Image2 : Desktop/2.png
+Image3 : Desktop/3.png
+Image4 : Desktop/4.png
+

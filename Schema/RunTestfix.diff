@@ -1,0 +1,228 @@
+diff --git a/TestHarness/CommandLineTool.cs b/TestHarness/CommandLineTool.cs
+index 6c1443f..f85185e 100644
+--- a/TestHarness/CommandLineTool.cs
++++ b/TestHarness/CommandLineTool.cs
+@@ -25,6 +25,7 @@
+ namespace Masti.TestHarness
+ {
+     using System;
++    using System.Collections.Generic;
+     using System.Linq;
+     using CommandLine;
+     using Masti.QualityAssurance;
+@@ -134,7 +135,15 @@ namespace Masti.TestHarness
+             if (options.Test.Count() > 0)
+             {
+                 TestHarness harness = new TestHarness(logger);
+-                harness.RunTests(options.Test);
++
++                Dictionary<string, List<string>> assemblyTests = new Dictionary<string, List<string>>();
++
++                foreach (string assemblyName in options.Test)
++                {
++                    assemblyTests.Add(assemblyName, null);
++                }
++
++                harness.RunTests(assemblyTests);
+             }
+             else if (options.Run != CommandLineOptions.Tool.None)
+             {
+diff --git a/TestHarness/TestHarness.cs b/TestHarness/TestHarness.cs
+index 195d45c..d4dd548 100644
+--- a/TestHarness/TestHarness.cs
++++ b/TestHarness/TestHarness.cs
+@@ -51,9 +51,9 @@ namespace Masti.TestHarness
+         /// Run all the Tests specified and calculate statistics.
+         /// </summary>
+         /// <param name="tests">Lists of the tests to be Run</param>
+-        public void RunTests(IList<string> tests)
++        public void RunTests(Dictionary<string, List<string>> assemblyTests)
+         {
+-            if (tests.Count < 1)
++            if (assemblyTests.Count < 1)
+             {
+                 return;
+             }
+@@ -61,66 +61,71 @@ namespace Masti.TestHarness
+             // Assembly Object that helps with Reflection for obtaining the Test object.
+             Assembly assembly;
+ 
+-            // Calculate Statistics of tests.
+-            int numberOfTests = tests.Count;
+-            int numberOfSuccessTests = 0;
+-            int numberOfFailureTests = 0;
+-
+             // List of the Tests that haven't run successfully.
+             List<string> failedTests = new List<string>();
+ 
+             // Check if the user requires to run all tests.
+-            if (tests.Contains("all"))
++            if (assemblyTests.ContainsKey("all"))
+             {
+-                tests = this.DiscoverTests();
++                assemblyTests = this.DiscoverTests();
+             }
+ 
++            // Calculate Statistics of tests.
++            double numberOfTests = (double)assemblyTests.Count;
++            double numberOfSuccessTests = 0;
++            double numberOfFailureTests = 0;
++
+             // Running each of the tests.
+-            foreach (string testName in tests)
++            foreach (string assemblyName in assemblyTests.Keys)
+             {
++                // Loading the Assembly for running the tests.
+                 try
+                 {
+-                    // Extract the Assembly Name from the test.
+-                    if (testName.IndexOf('.') > 0)
+-                    {
+-                        // Extract the namespace name from the test name.
+-                        string assemblyName = testName.Substring(0, testName.LastIndexOf('.'));
+-                        assembly = Assembly.Load(assemblyName);
+-                    }
+-                    else
+-                    {
+-                        // When the Test belongs to the TestHarness Project
+-                        assembly = Assembly.GetExecutingAssembly();
+-                    }
++                    assembly = Assembly.Load(assemblyName);
++                    List<string> tests = assemblyTests[assemblyName];
+ 
+-                    // Initialise the Test Object.
+-                    var type = assembly.GetType(testName);
+-                    ITest test = (ITest)Activator.CreateInstance(type, this.logger);
+-
+-                    // Running a given test.
+-                    Console.WriteLine("\nRunning Test {0}...", testName);
+-                    bool capture = test.Run();
+-                    Console.WriteLine("\nTest Complete. Status: {0}", capture);
+-
+-                    // Calculate statistic based on the status returned.
+-                    if (capture)
+-                    {
+-                        numberOfSuccessTests += 1;
+-                    }
+-                    else
++                    foreach (string testName in tests)
+                     {
+-                        numberOfFailureTests += 1;
+-                        failedTests.Add(testName);
++                        try
++                        {
++                            // Initialise the Test Object.
++                            var type = assembly.GetType(testName);
++                            ITest test = (ITest)Activator.CreateInstance(type, this.logger);
++
++                            // Running a given test.
++                            Console.WriteLine("\nRunning Test {0}...", testName);
++                            bool capture = test.Run();
++                            Console.WriteLine("\nTest Complete. Status: {0}", capture);
++
++                            // Calculate statistic based on the status returned.
++                            if (capture)
++                            {
++                                numberOfSuccessTests += 1;
++                            }
++                            else
++                            {
++                                numberOfFailureTests += 1;
++                                failedTests.Add(testName);
++                            }
++                        }
++                        catch (Exception)
++                        {
++                            // Handle execution when the Test Instance doesn't exists or results in
++                            // an Exception.
++                            Console.WriteLine("\n{0} is not a Valid Test", testName);
++
++                            numberOfFailureTests += 1;
++                            failedTests.Add(testName);
++                        }
+                     }
+                 }
+                 catch (Exception)
+                 {
+                     // Handle execution when the Test Instance doesn't exists or results in
+                     // an Exception.
+-                    Console.WriteLine("\n{0} is not a Valid Test", testName);
++                    Console.WriteLine("\n{0} is not a Valid Assembly", assemblyName);
+ 
+-                    numberOfFailureTests += 1;
+-                    failedTests.Add(testName);
++                    // Remove Tests from total calculation
+                 }
+             }
+ 
+@@ -128,8 +133,8 @@ namespace Masti.TestHarness
+             Console.WriteLine("\nCompleted All Tests");
+             Console.WriteLine("===================");
+ 
+-            Console.WriteLine("Success %: {0}", ((double)numberOfSuccessTests / numberOfTests) * 100);
+-            Console.WriteLine("Failure %: {0}", ((double)numberOfFailureTests / numberOfTests) * 100);
++            Console.WriteLine("Success %: {0:N2}", (numberOfSuccessTests / numberOfTests) * 100);
++            Console.WriteLine("Failure %: {0:N2}", (numberOfFailureTests / numberOfTests) * 100);
+ 
+             // Print the list of failed tests.
+             if (failedTests.Count > 0)
+@@ -147,15 +152,23 @@ namespace Masti.TestHarness
+         /// Return the Test names from all the registered Projects.
+         /// </summary>
+         /// <returns>List of Tests</returns>
+-        private IList<string> DiscoverTests()
++        private Dictionary<string, List<string>> DiscoverTests()
+         {
+             Assembly assembly;
+ 
++            // Retireving 
++            List<string> assemblyNames = new List<string>() { "Networking", "Masti.TestHarness" };
++
+             // Discover all the assemblies available to this projects.
+-            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
++            List<Assembly> assemblies = new List<Assembly>();
++            foreach (var assemblyName in assemblyNames)
++            {
++                assemblies.Add(Assembly.Load(assemblyName));
++            }
+ 
+             // List of tests to be returned.
+-            List<string> tests = new List<string>();
++            Dictionary<string, List<string>> tests = 
++                new Dictionary<string, List<string>>();
+ 
+             // Iterating through all the Assemblies to extracts all the Tests.
+             foreach (Assembly testAssembly in assemblies)
+@@ -164,6 +177,8 @@ namespace Masti.TestHarness
+                 string assemblyName = testAssembly.FullName;
+                 assembly = Assembly.Load(assemblyName);
+ 
++                // adding Dictionary key as the assembly name.
++                tests.Add(assemblyName, new List<string>());
+                 // Get all the objects within the assembly.
+                 var types = assembly.GetTypes();
+ 
+@@ -175,7 +190,7 @@ namespace Masti.TestHarness
+                     // Extract all Types with Test in their name and is not an Interface. 
+                     if (typeName.EndsWith("Test") && !type.IsInterface)
+                     {
+-                        tests.Add(testAssembly.GetName().Name + "." + typeName);
++                        tests[assemblyName].Add(type.FullName);
+                     }
+                 }
+             }
+diff --git a/TestHarness/TestHarness.csproj b/TestHarness/TestHarness.csproj
+index 90e8753..83de672 100644
+--- a/TestHarness/TestHarness.csproj
++++ b/TestHarness/TestHarness.csproj
+@@ -69,6 +69,10 @@
+     </None>
+   </ItemGroup>
+   <ItemGroup>
++    <ProjectReference Include="..\Networking\Networking.csproj">
++      <Project>{daa12b12-9f9d-4679-aafb-925c3da2b292}</Project>
++      <Name>Networking</Name>
++    </ProjectReference>
+     <ProjectReference Include="..\QualityAssurance\QualityAssurance.csproj">
+       <Project>{dc4cb8d0-d8ed-4659-bd52-68b7edfaa3db}</Project>
+       <Name>QualityAssurance</Name>

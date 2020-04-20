@@ -1,0 +1,6 @@
+﻿----------------------------------------------------------------
+example: 1 test case with 2 tags
+================================================================
+2
+Name : Einstein
+Description : The most intelligent man on the planet!

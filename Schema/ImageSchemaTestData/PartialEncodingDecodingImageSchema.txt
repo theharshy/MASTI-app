@@ -1,0 +1,7 @@
+﻿2
+FirstName : vishal
+LastName : chaudhary
+3
+Image1 : ImageSchemaTestData/1.jpg
+Image2 : ImageSchemaTestData/2.jpg
+Image3 : ImageSchemaTestData/3.jpg
